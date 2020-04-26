@@ -3,14 +3,14 @@
 #
 checks:
  # check these NFS mounts are healthy
- - nfs_mount:
-    mounts:
-     - "/home"
+ nfs_mount:
+  mounts:
+   - "/home"
  # check these users exist
- - user_exists:
-    users:
-     - alice
-     - bob
+ user_exists:
+  users:
+   - alice
+   - bob
  # check sssd status for the domain is healthy
- - sssd_health:
-    domain: CORP
+ sssd_health:
+  domain: CORP

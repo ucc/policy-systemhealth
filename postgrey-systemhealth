@@ -4,6 +4,7 @@ use strict;
 use warnings;
 use YAML::XS 'LoadFile';
 use Data::Dumper;
+use List::Util 'shuffle';
 use Getopt::Long 'GetOptions';
 
 my $config_file = '/etc/postfix/systemhealth.yml';
@@ -12,7 +13,7 @@ GetOptions('config=s' => \$config_file) or die "Usage: $0 --config CONFIG\n";
 
 my $config = LoadFile($config_file);
 
-print Dumper($config);
+# helpers
 
 sub undertake_check {
     my $check_result = shift;
@@ -24,8 +25,37 @@ sub undertake_check {
     }
 }
 
+sub check_configured {
+    my $config = shift;
+    my $check = shift;
+
+    return defined ${$config->{checks}}{$check};
+}
+
+# user checks
+
+sub check_users_present {
+    my $config = shift;
+
+    foreach my $user (shuffle @{$config->{checks}->{user_exists}->{users}}) {
+    	print "$user \n";
+    	if (not defined getpwnam($user)) {
+            return 0;
+        }
+
+    }
+
+    return 1;
+}
+
+# check configfile for check key
+print Dumper($config);
+undertake_check(defined $config->{'checks'}, 'systemhealth.yml error');
+
 # what checks are enabled in the config
-#
+if (check_configured($config,'user_exists')) {
+    undertake_check(check_users_present($config), 'user_exists');
+}
 undertake_check(1, 'True test');
 undertake_check(0, 'False test');
 
