@@ -13,3 +13,20 @@ GetOptions('config=s' => \$config_file) or die "Usage: $0 --config CONFIG\n";
 my $config = LoadFile($config_file);
 
 print Dumper($config);
+
+sub undertake_check {
+    my $check_result = shift;
+    my $check_name = shift;
+
+    if ( !$check_result ) {
+	print "432 Service temporarily unavailable - $check_name\n";
+	exit;
+    }
+}
+
+# what checks are enabled in the config
+#
+undertake_check(1, 'True test');
+undertake_check(0, 'False test');
+
+print "DUNNO\n";
