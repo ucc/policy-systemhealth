@@ -48,14 +48,35 @@ sub check_users_present {
     return 1;
 }
 
+# nfs checks
+
+sub check_nfs_mount {
+    return 1;
+}
+
+# sssd checks
+
+sub check_sssd_health {
+    return 1;
+}
+
 # check configfile for check key
 print Dumper($config);
 undertake_check(defined $config->{'checks'}, 'systemhealth.yml error');
 
 # what checks are enabled in the config
+if (check_configured($config,'nfs_mount')) {
+    undertake_check(check_users_present($config), 'nfs_mount');
+}
+
+if (check_configured($config,'sssd_health')) {
+    undertake_check(check_users_present($config), 'sssd_health');
+}
+
 if (check_configured($config,'user_exists')) {
     undertake_check(check_users_present($config), 'user_exists');
 }
+
 undertake_check(1, 'True test');
 undertake_check(0, 'False test');
 
