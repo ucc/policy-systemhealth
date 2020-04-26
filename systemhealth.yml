@@ -13,4 +13,4 @@ checks:
      - bob
  # check sssd status for the domain is healthy
  - sssd_health:
-   domain: CORP
+    domain: CORP
