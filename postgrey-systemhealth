@@ -4,7 +4,12 @@ use strict;
 use warnings;
 use YAML::XS 'LoadFile';
 use Data::Dumper;
-    
-my $config = LoadFile('systemhealth.yml');
+use Getopt::Long 'GetOptions';
+
+my $config_file = '/etc/postfix/systemhealth.yml';
+
+GetOptions('config=s' => \$config_file) or die "Usage: $0 --config CONFIG\n";
+
+my $config = LoadFile($config_file);
 
 print Dumper($config);
