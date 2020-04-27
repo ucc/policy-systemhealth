@@ -210,13 +210,12 @@ sub check_sssd_health {
     }
     
     print "Domain: $domain\n" if $debug;
-
-    # check sssctl is available and executable
     
     # check domain is Online
     my $cmd = "sssctl";
     my $path = which $cmd;
 
+    # check sssctl is available and executable
     if (not defined $path) {
         return 0;
     }
