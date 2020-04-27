@@ -27,6 +27,8 @@ use List::Util 'shuffle';
 use Getopt::Long 'GetOptions';
 use Time::HiRes qw{time alarm};
 use Array::Utils 'intersect';
+use Capture::Tiny ':all';
+use File::Which;
 
 my $nfs_timeout=5;  # 5 seconds, set to 10 in upstream
 my $debug = 0;
@@ -54,6 +56,8 @@ sub undertake_check {
     if ( !$check_result ) {
         error_msg($check_name);
     }
+
+    print "OK $check_name\n" if $debug;
 }
 
 sub check_configured {
@@ -193,7 +197,51 @@ sub check_nfs_mount {
 # sssd checks
 
 sub check_sssd_health {
-    return 1;
+    my $config = shift;
+
+    my $stdout;
+    my $stderr;
+    my $exit;
+
+    # check domain is defined
+    my $domain = $config->{checks}->{sssd_health}->{domain};
+    if (not defined $domain) {
+        return 0;
+    }
+    
+    print "Domain: $domain\n" if $debug;
+
+    # check sssctl is available and executable
+    
+    # check domain is Online
+    my $cmd = "sssctl";
+    my $path = which $cmd;
+
+    if (not defined $path) {
+        return 0;
+    }
+
+    my @args = ("domain-status", "-o", $domain);
+
+    ($stdout, $stderr, $exit) = capture {
+	system( $path, @args );
+    };
+    
+    print "sssctl STDOUT $stdout\n" if $debug;
+    print "sssctl STDERR $stderr\n" if $debug;
+    print "sssctl EXIT $exit\n" if $debug;
+
+    if ($exit) { 
+        # some other error
+        return 0; 
+    } 
+
+    # check Online status
+    # STDOUT must contain "Online status: Online"
+    my $check_string = "Online status: Online";
+    my $ok = index($stdout,$check_string) >= 0;
+    
+    return $ok;
 }
 
 # check configfile for check key
@@ -214,6 +262,7 @@ if (check_configured($config,'user_exists')) {
 }
 
 undertake_check(1, 'True test');
-undertake_check(0, 'False test');
+
+# undertake_check(0, 'False test');
 
 print "DUNNO\n";
