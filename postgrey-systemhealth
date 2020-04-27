@@ -29,6 +29,7 @@ use Time::HiRes qw{time alarm};
 use Array::Utils 'intersect';
 use Capture::Tiny ':all';
 use File::Which;
+use Sys::Syslog qw(:standard :macros);
 
 my $nfs_timeout=5;  # 5 seconds, set to 10 in upstream
 my $debug = 0;
@@ -40,12 +41,18 @@ GetOptions('config=s' => \$config_file, 'debug' => \$debug)
 
 my $config = LoadFile($config_file);
 
+# set up logging
+
+openlog("postgrey-systemhealth", "ndelay,pid", LOG_MAIL);
+
 # helpers
 
 sub error_msg {
     my $error = shift;
 
     print "432 Service temporarily unavailable - $error\n";
+    syslog(LOG_CRIT,"Pausing delivery due to error (%s)", $error);
+    closelog();
     exit;
 }
 
@@ -58,6 +65,7 @@ sub undertake_check {
     }
 
     print "OK $check_name\n" if $debug;
+    syslog(LOG_DEBUG,"Check passed (%s)", $check_name);
 }
 
 sub check_configured {
@@ -74,7 +82,9 @@ sub check_users_present {
 
     foreach my $user (shuffle @{$config->{checks}->{user_exists}->{users}}) {
     	print "Checking $user \n" if $debug;
+        syslog(LOG_DEBUG,"Checking user exists (%s)", $user);
     	if (not defined getpwnam($user)) {
+            syslog(LOG_INFO,"User does not exist (%s)", $user);
             return 0;
         }
 
@@ -135,7 +145,8 @@ sub check_mounts {
     my @ages=();
     my @warnings=();
     foreach $dir (@{$dirs}) {
-        print "Checking $dir\n" if $debug;
+        print "Checking NFS mount $dir\n" if $debug;
+        syslog(LOG_DEBUG,"Checking NFS mount (%s)", $dir);
         chomp $dir;
         $SIG{ALRM} = \&nfs_alarm_handler;
         my $start=time;
@@ -174,7 +185,9 @@ sub check_mounts {
         error_msg($msg);
     }
 
-    printf "NFS OK: $x mount points avg of %7.5f secs, max %7.5f secs.|$perfdata\n",$avgage,$maxage if $debug;
+    my $nfs_status = sprintf "NFS OK: $x mount points avg of %7.5f secs, max %7.5f secs.|$perfdata",$avgage,$maxage; 
+    print "$nfs_status\n" if $debug;
+    syslog(LOG_DEBUG,"NFS status (%s)", $nfs_status);
     # all looks good
     return 1;
 }
@@ -206,6 +219,7 @@ sub check_sssd_health {
     # check domain is defined
     my $domain = $config->{checks}->{sssd_health}->{domain};
     if (not defined $domain) {
+        syslog(LOG_WARNING,"sssd_health sssctl AD domain not set");
         return 0;
     }
     
@@ -217,6 +231,7 @@ sub check_sssd_health {
 
     # check sssctl is available and executable
     if (not defined $path) {
+        syslog(LOG_WARNING,"sssd_health sssctl command not available");
         return 0;
     }
 
@@ -232,6 +247,7 @@ sub check_sssd_health {
 
     if ($exit) { 
         # some other error
+        syslog(LOG_INFO,"sssd_health sssctl failing due to other error");
         return 0; 
     } 
 
@@ -260,8 +276,11 @@ if (check_configured($config,'user_exists')) {
     undertake_check(check_users_present($config), 'user_exists');
 }
 
-undertake_check(1, 'True test');
+undertake_check(1, 'always_true');
 
 # undertake_check(0, 'False test');
 
 print "DUNNO\n";
+syslog(LOG_INFO,"All checks passed");
+
+closelog();
