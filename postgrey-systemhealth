@@ -1,4 +1,23 @@
 #!/usr/bin/env perl
+# vim: ts=4 sts=4 sw=4:et ai:
+
+#    Copyright 2020 Mark Tearle
+#    Copyright 2007 Adicio, Inc.
+
+# Incorporates code from check_nfsmounts from Clint Byrum <clint@adicio.com>
+
+#    This program is free software; you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation; either version 3 of the License, or
+#    (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with this program.  If not, see <http://www.gnu.org/licenses/>. 
 
 use strict;
 use warnings;
@@ -6,22 +25,34 @@ use YAML::XS 'LoadFile';
 use Data::Dumper;
 use List::Util 'shuffle';
 use Getopt::Long 'GetOptions';
+use Time::HiRes qw{time alarm};
+use Array::Utils 'intersect';
+
+my $nfs_timeout=5;  # 5 seconds, set to 10 in upstream
+my $debug = 0;
 
 my $config_file = '/etc/postfix/systemhealth.yml';
 
-GetOptions('config=s' => \$config_file) or die "Usage: $0 --config CONFIG\n";
+GetOptions('config=s' => \$config_file, 'debug' => \$debug) 
+	or die "Usage: $0 --debug --config CONFIG\n";
 
 my $config = LoadFile($config_file);
 
 # helpers
+
+sub error_msg {
+    my $error = shift;
+
+    print "432 Service temporarily unavailable - $error\n";
+    exit;
+}
 
 sub undertake_check {
     my $check_result = shift;
     my $check_name = shift;
 
     if ( !$check_result ) {
-	print "432 Service temporarily unavailable - $check_name\n";
-	exit;
+        error_msg($check_name);
     }
 }
 
@@ -38,7 +69,7 @@ sub check_users_present {
     my $config = shift;
 
     foreach my $user (shuffle @{$config->{checks}->{user_exists}->{users}}) {
-    	print "$user \n";
+    	print "Checking $user \n" if $debug;
     	if (not defined getpwnam($user)) {
             return 0;
         }
@@ -50,19 +81,114 @@ sub check_users_present {
 
 # nfs checks
 
+our $dir; # Because its a signal handler, we have to 
+sub nfs_alarm_handler {
+    my $msg = "NFS CRITICAL:  Stale NFS mount point - $dir";
+    error_msg($msg);
+}
+
+sub bad_mount {
+    my $mountpoint=shift();
+    my $emsg=shift();
+    my $msg = "NFS CRITICAL: cannot operate on mount point $mountpoint. [$emsg]";
+    error_msg($msg);
+}
+
+sub find_nfs_mounts {
+    my $msg;
+    if(!open MTAB,"< /etc/mtab") {
+        $msg = "NFS UNKNOWN: could not open mtab.";
+        error_msg($msg);
+    }
+
+    my @dirs=();
+    my %mountmodes=();
+    while(my $line=<MTAB>) {
+        if($line =~ /^[^ ]+ [^ ]+ nfs /) {
+            my @fields=split(/\s+/,$line);
+            my $mountpoint=$fields[1];
+            push(@dirs,$mountpoint);
+
+            my $modes = {};
+            foreach my $mode (split(/,/,$fields[3])) {
+                $modes->{$mode}=1;
+            }
+            $mountmodes{$mountpoint}=$modes;
+        }
+    }
+    close MTAB;
+
+    if(@dirs < 1) {
+       $msg = "NFS OK: no NFS mounts found.";
+       error_msg($msg);
+    }
+
+    return \@dirs;
+}
+
+sub check_mounts {
+    my $dirs=shift;
+    my @ages=();
+    my @warnings=();
+    foreach $dir (@{$dirs}) {
+        print "Checking $dir\n" if $debug;
+        chomp $dir;
+        $SIG{ALRM} = \&nfs_alarm_handler;
+        my $start=time;
+        my $pid=fork;
+        if($pid==0) {
+            chdir $dir or &bad_mount($dir,$!);
+            exit 0;
+        } else {
+            alarm $nfs_timeout;
+            waitpid $pid,0;
+            if($?) {
+                &bad_mount($dir,$?);
+            };
+            alarm 0;
+        }
+        my $age=time()-$start;
+        push(@ages,$age);
+    }
+    
+    my $x=0;
+    my $agetot=0;
+    my $maxage=0;
+    foreach my $age (@ages) {
+        $agetot+=$age;
+        if($age > $maxage) {
+            $maxage=$age;
+        }
+        $x++;
+    }
+    my $avgage=$agetot/$x;
+    
+    my $perfdata=sprintf("maxtime=%9.7f;avgtime=%9.7f;mountpoints=$x",$maxage,$avgage);
+    
+    if(@warnings) {
+        my $msg = "NFS WARNING: @warnings|$perfdata";
+        error_msg($msg);
+    }
+
+    printf "NFS OK: $x mount points avg of %7.5f secs, max %7.5f secs.|$perfdata\n",$avgage,$maxage if $debug;
+    # all looks good
+    return 1;
+}
+
 sub check_nfs_mount {
     my $config = shift;
 
-    foreach my $mount (shuffle @{$config->{checks}->{nfs_mount}->{mounts}}) {
-    	print "$mount \n";
-	#if (not defined getpwnam($user)) {
-	#    return 0;
-	#}
+    # get mounts to check from config
+    my @to_check = @{$config->{checks}->{nfs_mount}->{mounts}};
 
-    }
+    # inspect mtab to find nfs mounts
+    my $nfs_mounts=find_nfs_mounts();
 
-    return 1;
+    # only check the intersection of the above lists
+    my @i = intersect(@to_check, @$nfs_mounts);
+    return check_mounts(\@i);
 }
+
 
 # sssd checks
 
@@ -71,7 +197,7 @@ sub check_sssd_health {
 }
 
 # check configfile for check key
-print Dumper($config);
+print Dumper($config) if $debug;
 undertake_check(defined $config->{'checks'}, 'systemhealth.yml error');
 
 # what checks are enabled in the config
