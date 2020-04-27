@@ -51,6 +51,16 @@ sub check_users_present {
 # nfs checks
 
 sub check_nfs_mount {
+    my $config = shift;
+
+    foreach my $mount (shuffle @{$config->{checks}->{nfs_mount}->{mounts}}) {
+    	print "$mount \n";
+	#if (not defined getpwnam($user)) {
+	#    return 0;
+	#}
+
+    }
+
     return 1;
 }
 
@@ -66,11 +76,11 @@ undertake_check(defined $config->{'checks'}, 'systemhealth.yml error');
 
 # what checks are enabled in the config
 if (check_configured($config,'nfs_mount')) {
-    undertake_check(check_users_present($config), 'nfs_mount');
+    undertake_check(check_nfs_mount($config), 'nfs_mount');
 }
 
 if (check_configured($config,'sssd_health')) {
-    undertake_check(check_users_present($config), 'sssd_health');
+    undertake_check(check_sssd_health($config), 'sssd_health');
 }
 
 if (check_configured($config,'user_exists')) {

@@ -18,3 +18,4 @@ On Debian install the following packages:
 
 * libyaml-perl
 * libgetopt-long-descriptive-perl
+* libarray-utils-perl
