@@ -203,6 +203,16 @@ sub check_nfs_mount {
 
     # only check the intersection of the above lists
     my @i = intersect(@to_check, @$nfs_mounts);
+
+    # check lists are the same length, if not, error
+    my $nummounts = scalar @to_check;
+    my $found = scalar @i;
+
+    if ($nummounts != $found) {
+        syslog(LOG_WARNING,"check_nfs_mount Difference in number of mounts (%d/%d) (%s) (%s)", $nummounts, $found, join(",", @to_check), join(",",@i));
+        return 0;
+    }
+
     return check_mounts(\@i);
 }
 
