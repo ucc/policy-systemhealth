@@ -10,7 +10,7 @@ See also http://www.postfix.org/access.5.html
 
 ## Usage:
 
-postgrey-systemhealth /etc/postfix/systemhealth.yml
+policy-systemhealth /etc/postfix/systemhealth.yml
 
 ### check_nfs_mount
 
