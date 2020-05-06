@@ -236,7 +236,7 @@ sub check_sssd_health {
     print "Domain: $domain\n" if $debug;
     
     # check domain is Online
-    my $cmd = "sssctl";
+    my $cmd = "/usr/sbin/sssctl";
     my $path = which $cmd;
 
     # check sssctl is available and executable
