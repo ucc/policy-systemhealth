@@ -50,7 +50,7 @@ openlog("postgrey-systemhealth", "ndelay,pid", LOG_MAIL);
 sub error_msg {
     my $error = shift;
 
-    print "432 Service temporarily unavailable - $error\n";
+    print "action=432 Service temporarily unavailable - $error\n\n";
     syslog(LOG_CRIT,"Pausing delivery due to error (%s)", $error);
     closelog();
     exit;
@@ -290,7 +290,7 @@ undertake_check(1, 'always_true');
 
 # undertake_check(0, 'False test');
 
-print "DUNNO\n";
+print "action=DUNNO\n\n";
 syslog(LOG_INFO,"All checks passed");
 
 closelog();
