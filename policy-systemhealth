@@ -43,7 +43,7 @@ my $config = LoadFile($config_file);
 
 # set up logging
 
-openlog("postgrey-systemhealth", "ndelay,pid", LOG_MAIL);
+openlog("policy-systemhealth", "ndelay,pid", LOG_MAIL);
 
 # helpers
 
