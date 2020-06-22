@@ -31,6 +31,12 @@ AD server downtime can be simulated using above technique of blocking the host.
 
 ### user_exists
 
+This runs through a lists of users configured calling getpwnam to check if 
+that returns a password entry
+
+## Configuration
+
+A sample systemhealth.yml file is included in this repository
 
 ## Dependencies
 
